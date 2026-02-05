@@ -2,40 +2,40 @@
 export enum UserRole {
   ADMIN = 'Admin',
   MANAGER = 'Manager',
-  EMPLOYEE = 'Employee'
+  EMPLOYEE = 'Employé'
 }
 
 export enum TaskStatus {
-  TODO = 'To Do',
-  ONGOING = 'In Progress',
-  BLOCKED = 'Blocked',
-  DONE = 'Done'
+  TODO = 'À faire',
+  ONGOING = 'En cours',
+  BLOCKED = 'Bloqué',
+  DONE = 'Terminé'
 }
 
 export enum TaskPriority {
-  LOW = 'Low',
-  MEDIUM = 'Medium',
-  HIGH = 'High',
-  URGENT = 'Urgent'
+  LOW = 'Basse',
+  MEDIUM = 'Moyenne',
+  HIGH = 'Haute',
+  URGENT = 'Urgente'
 }
 
 export enum ProjectStatus {
-  PLANNING = 'Planning',
-  ACTIVE = 'Active',
-  PAUSED = 'Paused',
-  DONE = 'Done'
+  PLANNING = 'Planification',
+  ACTIVE = 'Actif',
+  PAUSED = 'En pause',
+  DONE = 'Terminé'
 }
 
 export enum ProjectRole {
-  OWNER = 'Owner',
-  LEAD = 'Lead',
-  CONTRIBUTOR = 'Contributor'
+  OWNER = 'Propriétaire',
+  LEAD = 'Responsable',
+  CONTRIBUTOR = 'Contributeur'
 }
 
 export enum ActionItemStatus {
-  OPEN = 'Open',
-  IN_PROGRESS = 'In Progress',
-  COMPLETED = 'Completed'
+  OPEN = 'Ouvert',
+  IN_PROGRESS = 'En cours',
+  COMPLETED = 'Terminé'
 }
 
 export type LLMProvider = 'local_http';
@@ -51,7 +51,7 @@ export interface ChatMessage {
   id: string;
   role: 'user' | 'assistant';
   content: string;
-  attachments?: { name: string, type: string, data?: string }[]; // Pour images/fichiers
+  attachments?: { name: string, type: string, data?: string }[];
   timestamp: Date;
 }
 
@@ -65,7 +65,7 @@ export interface User {
   managerId?: string | null;
   avatarUrl?: string;
   password?: string; 
-  location?: string; // New: Country/City
+  location?: string;
 }
 
 export interface ChecklistItem {
@@ -74,10 +74,9 @@ export interface ChecklistItem {
   done: boolean;
 }
 
-// Nouvelle interface pour les dépendances externes avec statut RAG
 export interface ExternalDependency {
   id: string;
-  label: string; // Nom du système ou de la personne
+  label: string; 
   status: 'Red' | 'Amber' | 'Green';
 }
 
@@ -89,8 +88,8 @@ export interface Task {
   priority: TaskPriority;
   assigneeId?: string; 
   eta: string; 
-  dependencies?: string[]; // Internal dependencies (Task IDs)
-  externalDependencies?: ExternalDependency[]; // New: External systems/people
+  dependencies?: string[];
+  externalDependencies?: ExternalDependency[];
   weight: number; 
   isImportant: boolean; 
   checklist?: ChecklistItem[]; 
@@ -113,9 +112,9 @@ export interface Project {
   tasks: Task[];
   isImportant: boolean; 
   docUrls?: string[]; 
-  dependencies?: string[]; // Internal Project IDs
-  externalDependencies?: ExternalDependency[]; // New: External systems/people
-  additionalDescriptions?: string[]; // New: Context fields for AI (3 x 2000 chars)
+  dependencies?: string[];
+  externalDependencies?: ExternalDependency[];
+  additionalDescriptions?: string[];
 }
 
 export interface Team {
@@ -162,19 +161,17 @@ export interface WeeklyReport {
   managerAnnotation?: string; 
 }
 
-// --- NOUVEAUX TYPES POUR LES NOTES (CANVAS) ---
-
 export type NoteBlockType = 'text' | 'image' | 'rectangle' | 'circle' | 'line' | 'drawing';
 
 export interface NoteBlock {
   id: string;
   type: NoteBlockType;
-  content?: string; // Texte, Base64 Image, ou SVG Path Data (pour drawing)
-  position: { x: number, y: number }; // Coordonnées absolues dans le canvas
+  content?: string;
+  position: { x: number, y: number };
   style?: {
     width?: string;
     height?: string;
-    color?: string; // Background color or Border color or Stroke color
+    color?: string;
   };
 }
 
@@ -197,5 +194,5 @@ export interface AppState {
   currentUser: User | null;
   theme: 'light' | 'dark';
   llmConfig: LLMConfig;
-  prompts?: Record<string, string>; // New: Custom prompt templates
+  prompts?: Record<string, string>;
 }

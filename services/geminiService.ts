@@ -1,6 +1,5 @@
-// Ce fichier est obsolète car le support Gemini a été retiré.
-// Veuillez utiliser services/llmService.ts pour les fonctionnalités d'IA (Ollama / Local HTTP).
-export const generateTeamReport = async () => {
-    console.warn("Gemini service is deprecated and removed.");
-    return "Service Gemini supprimé. Veuillez configurer un fournisseur local dans les paramètres.";
-}
+
+// Ce fichier a été supprimé pour garantir une confidentialité totale.
+// L'application utilise désormais uniquement services/llmService.ts 
+// configuré sur un endpoint HTTP local (127.0.0.1).
+export const geminiServiceDisabled = true;

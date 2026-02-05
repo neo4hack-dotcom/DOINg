@@ -187,8 +187,6 @@ const fillTemplate = (template: string, replacements: Record<string, string>) =>
     return result;
 }
 
-// --- Internal Helper Functions (Missing fixed) ---
-
 const buildChatContext = (history: ChatMessage[]): string => {
     return history.map(msg => {
         const attachmentInfo = msg.attachments && msg.attachments.length > 0 
@@ -198,34 +196,7 @@ const buildChatContext = (history: ChatMessage[]): string => {
     }).join('\n');
 };
 
-const callOllama = async (prompt: string, config: LLMConfig, images: string[] = []): Promise<string> => {
-    const url = `${config.baseUrl || 'http://localhost:11434'}/api/generate`;
-    const body: any = {
-        model: config.model || 'llama3',
-        prompt: prompt,
-        stream: false
-    };
-
-    if (images && images.length > 0) {
-        body.images = images;
-    }
-
-    const response = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
-    });
-
-    if (!response.ok) {
-        throw new Error(`Ollama API Error: ${response.statusText}`);
-    }
-
-    const data = await response.json();
-    return data.response;
-};
-
 const callLocalHttp = async (prompt: string, config: LLMConfig): Promise<string> => {
-    // OpenAI-compatible endpoint format (common for LocalAI, LM Studio, etc.)
     const url = config.baseUrl || 'http://localhost:8000/v1/chat/completions';
     
     const headers: Record<string, string> = {
@@ -246,11 +217,10 @@ const callLocalHttp = async (prompt: string, config: LLMConfig): Promise<string>
     });
 
     if (!response.ok) {
-        throw new Error(`Local HTTP API Error: ${response.statusText}`);
+        throw new Error(`API HTTP Error: ${response.statusText}`);
     }
 
     const data = await response.json();
-    // Handle OpenAI-like structure or flat structure
     return data.choices?.[0]?.message?.content || data.content || JSON.stringify(data);
 };
 
@@ -260,7 +230,7 @@ export const generateTeamReport = async (team: Team, manager: User | undefined, 
   const data = prepareTeamData(team, manager);
   const template = customPrompts?.['team_report'] || DEFAULT_PROMPTS.team_report;
   const prompt = fillTemplate(template, { DATA: data });
-  return runPrompt(prompt, config);
+  return callLocalHttp(prompt, config);
 };
 
 export const generateMeetingSummary = async (meeting: Meeting, team: Team | undefined, users: User[], config: LLMConfig, customPrompts?: Record<string, string>): Promise<string> => {
@@ -274,7 +244,7 @@ export const generateMeetingSummary = async (meeting: Meeting, team: Team | unde
         TITLE: meeting.title 
     });
     
-    return runPrompt(prompt, config);
+    return callLocalHttp(prompt, config);
 };
 
 export const generateWeeklyReportSummary = async (report: WeeklyReport, user: User | null, config: LLMConfig, customPrompts?: Record<string, string>): Promise<string> => {
@@ -285,19 +255,17 @@ export const generateWeeklyReportSummary = async (report: WeeklyReport, user: Us
         NAME: `${user?.firstName} ${user?.lastName}`,
         WEEK: report.weekOf
     });
-    return runPrompt(prompt, config);
+    return callLocalHttp(prompt, config);
 }
 
 export const generateManagementInsight = async (teams: Team[], reports: WeeklyReport[], users: User[], config: LLMConfig, customPrompts?: Record<string, string>): Promise<string> => {
     const data = prepareManagementData(teams, reports, users);
     const template = customPrompts?.['management_insight'] || DEFAULT_PROMPTS.management_insight;
     const prompt = fillTemplate(template, { DATA: data });
-    return runPrompt(prompt, config);
+    return callLocalHttp(prompt, config);
 }
 
-// Keeping original hardcoded prompts for complex tasks like Risk Assessment & Note Summary for now (less likely to be edited by user)
 export const generateRiskAssessment = async (teams: Team[], reports: WeeklyReport[], users: User[], config: LLMConfig): Promise<string> => {
-    // 1. Collect Project Context
     const projectContext = teams.flatMap(t => t.projects.map(p => {
         const context = (p.additionalDescriptions || []).join(' ');
         const blockedTasks = p.tasks.filter(task => task.status === TaskStatus.BLOCKED).map(t => t.title).join(', ');
@@ -308,7 +276,6 @@ export const generateRiskAssessment = async (teams: Team[], reports: WeeklyRepor
         `;
     })).join('\n');
 
-    // 2. Collect Last 3 Reports per User
     const reportsByUser: {[key: string]: WeeklyReport[]} = {};
     reports.forEach(r => {
         if (!reportsByUser[r.userId]) reportsByUser[r.userId] = [];
@@ -328,28 +295,14 @@ export const generateRiskAssessment = async (teams: Team[], reports: WeeklyRepor
 
     const prompt = `
     ACT AS: A Senior Risk Manager and Auditor.
-    
     INPUT DATA:
-    --- PROJECTS STATUS & CONTEXT ---
     ${projectContext}
-    
-    --- USER REPORTS (LAST 3 WEEKS) ---
     ${userReportsContext}
-
-    MISSION:
-    Detect HIGH RISKS linked to Projects (delays, blockers) or Resources (burnout, recurring issues, negative trend).
-    
-    CONSTRAINT:
-    - If NO major risk is detected, output exactly: "No major risks detected."
-    - If risks are detected, format them as a concise Markdown list.
-    - Be very precise. Cite the Project or User concerned.
-    - Use **Bold** for severity level (e.g. **CRITICAL**, **HIGH RISK**).
-
-    Output Example:
-    - **CRITICAL**: Project X is overdue and has blocked tasks since 3 weeks.
-    - **HIGH RISK**: User Y reports Red status for 3 consecutive weeks. Burnout risk.
+    MISSION: Detect HIGH RISKS linked to Projects or Resources.
+    If no risks, output: "No major risks detected."
+    Otherwise, Markdown list with **Bold** severity.
     `;
-    return runPrompt(prompt, config);
+    return callLocalHttp(prompt, config);
 }
 
 export const generateNoteSummary = async (note: Note, includeImages: boolean, config: LLMConfig): Promise<string> => {
@@ -358,99 +311,23 @@ export const generateNoteSummary = async (note: Note, includeImages: boolean, co
         .map(b => b.content || '')
         .join('\n\n');
 
-    const images: string[] = [];
-    if (includeImages) {
-        note.blocks.filter(b => b.type === 'image' && b.content).forEach(b => {
-            if (b.content) {
-                const base64 = b.content.split(',')[1];
-                if (base64) images.push(base64);
-            }
-        });
-    }
-
     const prompt = `
-    TASK: Summarize the following unstructured note content into a concise, professional summary.
-    ${includeImages ? 'NOTE: Images have been provided as context. Please incorporate their visual information into the summary if relevant.' : ''}
-
-    NOTE TITLE: ${note.title}
-    DATE: ${note.createdAt}
-
-    CONTENT:
-    ${textContent}
-
-    OUTPUT FORMAT:
-    **AI Summary:**
-    [Your summary here]
-    
-    Use **Bold** with "Alert", "Important", "Success" to highlight key facts.
+    TASK: Summarize note content.
+    TITLE: ${note.title}
+    CONTENT: ${textContent}
+    Format: Markdown summary.
     `;
 
-    return runPrompt(prompt, config, images);
+    return callLocalHttp(prompt, config);
 }
 
 export const sendChatMessage = async (history: ChatMessage[], newPrompt: string, config: LLMConfig, images: string[] = []): Promise<string> => {
     const context = buildChatContext(history);
-    
-    const fullPrompt = `
-    You are DOINg Assistant, an AI integrated into a project management tool.
-    
-    CRITICAL: You MUST answer strictly in ENGLISH.
-    
-    Here is the recent conversation history:
-    ${context}
-    
-    New User Request:
-    ${newPrompt}
-    
-    Answer in a helpful, professional, and concise manner in ENGLISH.
-    Use **Bold** for emphasis. If mentioning risks, use words like "Warning" or "Alert" inside bold tags.
-    `;
-    
-    return runPrompt(fullPrompt, config, images);
+    const fullPrompt = `You are DOINg Assistant. Answer in English.\nHistory:\n${context}\nNew Request: ${newPrompt}`;
+    return callLocalHttp(fullPrompt, config);
 };
 
 export const generateDocumentSynthesis = async (contentOrDescription: string, config: LLMConfig): Promise<string> => {
-    const prompt = `
-    Task: Generate a professional summary of the provided document or content.
-    
-    Content to analyze:
-    ${contentOrDescription}
-    
-    Mandatory Output Format (Bullet points):
-    • Context: (What the document is about)
-    • Key Takeaways: (Key info, numbers, decisions). Use **Bold** for numbers/wins.
-    • Attention Points: (Risks, required actions). Use **Bold** with "Alert" or "Warning" for risks.
-    
-    Be creative but precise. Format response in clean Markdown. Answer in ENGLISH.
-    `;
-    
-    return runPrompt(prompt, config);
+    const prompt = `Task: Generate synthesis.\nContent: ${contentOrDescription}`;
+    return callLocalHttp(prompt, config);
 }
-
-const runPrompt = async (prompt: string, config: LLMConfig, images: string[] = []): Promise<string> => {
-    try {
-        switch (config.provider) {
-          case 'ollama':
-            return await callOllama(prompt, config, images);
-          case 'local_http':
-            return await callLocalHttp(prompt, config);
-          default:
-            return `Provider ${config.provider} not supported.`;
-        }
-      } catch (error: any) {
-        return `Generation Error (${config.provider}): ${error.message}`;
-      }
-}
-
-export const fetchOllamaModels = async (baseUrl: string): Promise<string[]> => {
-  try {
-    const url = baseUrl || 'http://localhost:11434';
-    const response = await fetch(`${url}/api/tags`);
-    if (!response.ok) throw new Error("Error fetching tags");
-    const data = await response.json();
-    return data.models?.map((m: any) => m.name) || [];
-  } catch (e) {
-    console.error("Error fetching Ollama models", e);
-    return [];
-  }
-};
